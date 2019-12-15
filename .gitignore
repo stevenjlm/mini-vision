@@ -141,3 +141,5 @@ tramp
 .\#*
 
 data
+log
+yolov3.weights
