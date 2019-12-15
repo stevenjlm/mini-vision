@@ -49,7 +49,7 @@ class VisionTools:
             log.info("Loading YOLO from disk...")
             self.net = cv2.dnn.readNetFromDarknet(self.configPath, self.weightsPath)
 
-            # load comments from yaml
+            # load captions from yaml
             self.stream = open('cv_comm.yaml', 'r')
             self.cv_comms = yaml.load(self.stream)
 
@@ -74,7 +74,7 @@ class VisionSystem:
         self.image_gray = cv2.cvtColor(self.img, cv2.COLOR_BGR2GRAY)
 
         self.tools = tools
-        self.full_comment = ""
+        self.full_caption = ""
         self.pr_img = None
 
     def process_task(self, vision_task):
@@ -84,8 +84,8 @@ class VisionSystem:
         image_file_name = timeStamped('processed.png')
         cv2.imwrite('../data/processed/' + image_file_name, self.pr_img, [cv2.IMWRITE_PNG_COMPRESSION, 8])
 
-    def produce_comment(self):
-        return self.full_comment
+    def produce_caption(self):
+        return self.full_caption
 
 """ Vision task abstract class """
 
@@ -135,7 +135,7 @@ class DominantColor(VisionTask):
             color = get_colour_name(list(dominant_color)[::-1])
             if color != "gray" and color != "black" and color != "silver" and color!= "white":
                 log.info("Color is %s" % color)
-                system.full_comment += "There's a " + color + " tinge to the image. "
+                system.full_caption += "There's a " + color + " tinge to the image. "
         return
 
 def get_colour_name(rgb_triplet):
@@ -157,9 +157,9 @@ class Colorfulness(VisionTask):
         colorfness = self.image_colorfulness(system.img)
         log.info("Colorfulness: %f" % colorfness)
         if colorfness > 52.0:
-            system.full_comment += system.tools.cv_comms['colorful']
+            system.full_caption += system.tools.cv_comms['colorful']
         if colorfness < 1.0:
-            system.full_comment += system.tools.cv_comms['bw']
+            system.full_caption += system.tools.cv_comms['bw']
 
     def image_colorfulness(self, image):
         # split the image into its respective RGB components
@@ -190,10 +190,10 @@ class ContrastTones(VisionTask):
         std_s = np.std(system.hsv[:,:,2])
         log.info("Mean and std value %f, %f" % (mean_s, std_s))
         if std_s > 80.0:
-            if system.full_comment == "":
-                system.full_comment += system.tools.cv_comms['new-contrast']
+            if system.full_caption == "":
+                system.full_caption += system.tools.cv_comms['new-contrast']
             else:
-                system.full_comment += system.tools.cv_comms['second-contrast']
+                system.full_caption += system.tools.cv_comms['second-contrast']
 
         histr = cv2.calcHist([system.img],[0],None,[256],[0,256])
         sum_low = np.sum(histr[:65])
@@ -201,16 +201,16 @@ class ContrastTones(VisionTask):
         system.peak = np.max(histr)
         bright_dark = 0
         if mean_s < 120 and sum_low > 2.7 * sum_high:
-            system.full_comment += system.tools.cv_comms['dark']
+            system.full_caption += system.tools.cv_comms['dark']
             bright_dark = 1
         if mean_s > 120 and sum_high > 2.2 * sum_low:
-            system.full_comment += system.tools.cv_comms['bright']
+            system.full_caption += system.tools.cv_comms['bright']
             bright_dark =1
         if np.abs(sum_high / sum_low) < .05:
             if bright_dark == 0:
-                system.full_comment += system.tools.cv_comms['new-balance']
+                system.full_caption += system.tools.cv_comms['new-balance']
             else:
-                system.full_comment += system.tools.cv_comms['old-balance']
+                system.full_caption += system.tools.cv_comms['old-balance']
             log.info("Sum low and high %f, %f" % (sum_low, sum_high))
 
 """ Fade detection """
@@ -220,13 +220,8 @@ class Fade(VisionTask):
         log.info("Testing for image fade")
         log.info(system.image_gray.shape)
         mn = np.amin(system.image_gray)
-        comm = False
         if mn > 30.0:
-            comm = True
-            log.info("FADED")
-            p = random.randint(0,3)
-            if p <= 1:
-                system.full_comment += system.tools.cv_comms['fade']
+            system.full_caption += system.tools.cv_comms['fade']
         return
 
 """ Faces """
@@ -244,14 +239,14 @@ class Faces(VisionTask):
         system.dump_pr()
 
         if len(faces) == 1:
-            if "compisition" not in system.full_comment:
+            if "compisition" not in system.full_caption:
                 self.face_composition(faces[0], system)
-            if system.full_comment == "":
-                system.full_comment += system.tools.cv_comms['one-face']
+            if system.full_caption == "":
+                system.full_caption += system.tools.cv_comms['one-face']
             else:
-                system.full_comment += system.tools.cv_comms['old-one-face']
+                system.full_caption += system.tools.cv_comms['old-one-face']
         elif len(faces) > 1:
-            system.full_comment += system.tools.cv_comms['faces']
+            system.full_caption += system.tools.cv_comms['faces']
 
     def face_composition(self, position, system):
         x, y, w, h = position
@@ -260,13 +255,13 @@ class Faces(VisionTask):
         log.info("Relative position")
         log.info(relx)
         if relx > .45 and relx < .55:
-            system.full_comment += system.tools.cv_comms['comp-central']
+            system.full_caption += system.tools.cv_comms['comp-central']
             log.info("Central composition")
         elif relx > .28 and relx < .38:
-            system.full_comment += system.tools.cv_comms['comp-thirds']
+            system.full_caption += system.tools.cv_comms['comp-thirds']
             log.info("Left third composition")
         elif relx > .61 and relx < .71:
-            system.full_comment += system.tools.cv_comms['comp-thirds']
+            system.full_caption += system.tools.cv_comms['comp-thirds']
             log.info("Right third composition")
 
 
@@ -294,19 +289,22 @@ class ObjRecon(VisionTask):
                 lbl = system.tools.LABELS[classID]
                 if confidence > 0.0:
                     log.info("DETECTED: %s with conf score %f" % (lbl, confidence))
-                if confidence > 0.85:
+                if confidence > 0.70:
                     label_count[classID] += 1
-        self.gen_comments(label_count, system)
+        self.gen_captions(label_count, system)
 
-    def gen_comments(self, label_count, system):
+    def gen_captions(self, label_count, system):
         idx = 0
         objects = 0
         for count in label_count:
             extention = ""
+            if count > 0:
+                log.info(system.tools.LABELS[idx])
+                log.info(count)
             if system.tools.LABELS[idx] == "person":
                 if count == 1:
                     extention = system.tools.cv_comms['one-person']
-                elif count > 3:
+                elif count > 1:
                     extention = system.tools.cv_comms['people']
             else:
                 if count == 1:
@@ -327,7 +325,7 @@ class ObjRecon(VisionTask):
                         extention = system.tools.cv_comms['more-objs']
                         extention += str(count) + " "
                         extention += system.tools.LABELS[idx] + "s! "
-            system.full_comment += extention
+            system.full_caption += extention
             idx += 1
         return
 
@@ -338,7 +336,7 @@ class NaturalImg(VisionTask):
         histr = cv2.calcHist([system.img],[0],None,[256],[0,256])
         system.peak = np.max(histr)
         if system.peak > 32800:
-            system.full_comment += system.tools.cv_comms['natural']
+            system.full_caption += system.tools.cv_comms['natural']
 
 """ OpenCV metrics """
 def opencv_metrics(img):
@@ -350,8 +348,8 @@ def opencv_metrics(img):
     for task in tasks:
         system.process_task(task)
 
-    log.info("Len comment %d" % len(system.full_comment)) 
-    return system.full_comment
+    log.info("Len caption %d" % len(system.full_caption)) 
+    return system.full_caption
 
 if __name__ == '__main__':
     # reads an input image
@@ -361,5 +359,5 @@ if __name__ == '__main__':
                         default="../img/img1.jpg")
     args = parser.parse_args()
     img = cv2.imread(args.filename)
-    cv_comment = opencv_metrics(img)
-    log.info("Final comment: %s" % cv_comment)
+    cv_caption = opencv_metrics(img)
+    log.info("Final caption: %s" % cv_caption)
