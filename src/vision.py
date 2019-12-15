@@ -9,6 +9,8 @@ import os
 import yaml
 import copy
 import datetime
+from argparse import ArgumentParser
+import os.path
 
 """ logging """
 import logging
@@ -352,7 +354,12 @@ def opencv_metrics(img):
     return system.full_comment
 
 if __name__ == '__main__':
-    # reads an input image 
-    img = cv2.imread('../img/img1.jpg')
+    # reads an input image
+    parser = ArgumentParser(description="Mini-vision")
+    parser.add_argument("-f", dest="filename", required=False,
+                        help="Input an image file path",
+                        default="../img/img1.jpg")
+    args = parser.parse_args()
+    img = cv2.imread(args.filename)
     cv_comment = opencv_metrics(img)
     log.info("Final comment: %s" % cv_comment)
